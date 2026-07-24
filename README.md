@@ -11,6 +11,18 @@ reads the per-component feedback, and improves — over and over. It's the EdgeB
 > EdgeBench is deliberately brutal: even frontier models reach only ~15–20/100 at 12h on this task.
 > The point isn't to win the leaderboard — it's a genuine, verifiable metric for a self-improving loop.
 
+## Live learning curve
+
+`solar-open2`'s judge score on this single task vs elapsed wall-clock time (best-so-far
+envelope + each submission). Auto-regenerated from the run's SQLite store as it improves —
+same idea as EdgeBench's own time-vs-performance curves, for one model on one task.
+
+![dabic self-improving curve](assets/dabic_curve.png)
+
+```bash
+python scripts/plot_curve.py         # regenerate assets/dabic_curve.png from outputs/dabic.sqlite
+```
+
 ## Why this is "real"
 
 - The task **data, SimPEG environment, and the grading judge** come from EdgeBench's **public Docker
