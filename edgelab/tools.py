@@ -32,8 +32,18 @@ class ToolCtx:
     last_score: dict
 
 
+def _norm_out(rel: str) -> str:
+    """Files live in workspace/ which IS the container's outputs/. Accept both
+    'dabic_directive.py' and 'outputs/dabic_directive.py' -> same place."""
+    rel = rel.strip().lstrip("/")
+    for pre in ("outputs/", "./outputs/", "workspace/"):
+        if rel.startswith(pre):
+            rel = rel[len(pre):]
+    return rel or "."
+
+
 def _safe(base: Path, rel: str) -> Path:
-    p = (base / rel).resolve()
+    p = (base / _norm_out(rel)).resolve()
     if base not in p.parents and p != base:
         raise ValueError(f"path escapes {base.name}/")
     return p
@@ -69,8 +79,9 @@ TOOLS = [
         }, "required": ["path"]}}},
     {"type": "function", "function": {
         "name": "write_output",
-        "description": "Create/overwrite a deliverable file under outputs/ "
-                       "(e.g. dabic_directive.py, run_synthetic.py, run_vinton.py, results.json, report.md).",
+        "description": "Create/overwrite a deliverable file. Use a BARE name — it lands in outputs/ "
+                       "(e.g. path='dabic_directive.py'). In run_work, reference it as 'outputs/dabic_directive.py'. "
+                       "A leading 'outputs/' in the path is accepted and ignored (no nesting).",
         "parameters": {"type": "object", "properties": {
             "path": {"type": "string"}, "content": {"type": "string"},
         }, "required": ["path", "content"]}}},
@@ -123,8 +134,9 @@ def dispatch(name: str, args: dict, ctx: ToolCtx) -> dict:
         if name == "score":
             result = docker_env.run_judge()
             ctx.store.add_submission(turn=ctx.turn, result=result)
-            ctx.last_score.clear(); ctx.last_score.update(result)
-            return _compact_score(result)
+            compact = _compact_score(result)
+            ctx.last_score.clear(); ctx.last_score.update(compact)
+            return compact
 
         return {"error": f"unknown tool {name}"}
     except Exception as e:  # never crash the loop on a tool error

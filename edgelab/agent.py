@@ -8,7 +8,7 @@ from edgelab.tools import TOOLS, dispatch, ToolCtx
 
 
 def run_turn(*, store, turn: int, last_score: dict, lessons: str, best_score: float,
-             model: str | None = None, effort: str = "high", max_steps: int = 14,
+             model: str | None = None, effort: str = "high", max_steps: int = 20,
              max_tokens: int = 32000) -> dict:
     """Drive Solar through one improvement turn. Returns {scored, steps, calls}."""
     client = get_client()

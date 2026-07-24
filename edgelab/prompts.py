@@ -37,8 +37,11 @@ hidden problems — it MUST work and generalize) | D Vinton 30 | E behavior-fing
 - Don't modify starter's model/observation/data logic; don't read hidden judge files.
 - Read the papers (read_resource) for the method; read the judge source to see exactly what earns points.
 
-Be decisive and produce runnable code. After meaningful edits, always `score` to get feedback,
-then act on the lowest-hanging component. Return concise reasoning; put real work in tool calls.\
+Be decisive and produce runnable code. IMPORTANT: call `score` EARLY (within your first several
+steps) even if the code is still rough — the A-F component feedback is your main compass, and you
+have a limited step budget per turn. Don't burn the whole turn debugging before you score at least
+once. Files land in outputs/: write path='dabic_directive.py', run it as 'outputs/dabic_directive.py'.
+Return concise reasoning; put real work in tool calls.\
 """
 
 

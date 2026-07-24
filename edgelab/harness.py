@@ -11,6 +11,7 @@ import time
 from solar import get_client, DEFAULT_MODEL
 from edgelab import agent, docker_env
 from edgelab.store import Store
+from edgelab.tools import _compact_score
 
 SUMMARIZE_EVERY = 6
 
@@ -59,6 +60,15 @@ def run(*, db="outputs/dabic.sqlite", minutes=None, max_turns=1000,
         out = agent.run_turn(store=store, turn=turn, last_score=last_score,
                              lessons=lessons, best_score=best, model=model, effort=effort)
         last_score = out["last_score"] or last_score
+
+        # Safety net: guarantee one graded submission per turn even if the agent
+        # spent all its steps editing/debugging and forgot to call `score`.
+        if not out["scored"]:
+            print("    [auto-score] agent didn't score; running judge on current outputs/")
+            result = docker_env.run_judge()
+            store.add_submission(turn=turn, result=result)
+            last_score = _compact_score(result)
+            print(f"    [auto-score] {result.get('score')}/100  {str(result.get('summary'))[:70]}")
 
         row = store.best()
         new_best = row["score"] if row else 0.0
