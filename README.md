@@ -11,6 +11,23 @@ reads the per-component feedback, and improves — over and over. It's the EdgeB
 > EdgeBench is deliberately brutal: even frontier models reach only ~15–20/100 at 12h on this task.
 > The point isn't to win the leaderboard — it's a genuine, verifiable metric for a self-improving loop.
 
+## What the task actually is
+
+3D gravity inversion: buried salt-dome bodies create a tiny surface gravity anomaly (right),
+and the job is to reconstruct the 3D density structure (middle) from that anomaly alone — an
+ill-posed inverse problem that needs regularization, which is exactly what D-ABIC adaptively
+tunes. Depth sweep of a real SimPEG inversion on the synthetic Model 3:
+
+![gravity inversion depth sweep](assets/dabic_inversion.gif)
+
+```bash
+# regenerate: run the inversion in the work container, then render
+docker run --rm --platform linux/amd64 -v "$PWD/outputs/viz:/dump" \
+  -w /home/workspace/dabic_gravity_vinton --entrypoint bash \
+  seededge/edgebench.work.dabic_gravity_inversion:85db0aba8a5f -c "python /dump/inv.py"  # scripts/_invert_for_viz.py
+python scripts/make_gif.py
+```
+
 ## Live learning curve
 
 `solar-open2`'s judge score on this single task vs elapsed wall-clock time (best-so-far
