@@ -7,6 +7,8 @@ periodically compress history into `lessons` so context stays bounded forever.
 from __future__ import annotations
 import json
 import time
+import shutil
+from pathlib import Path
 
 from solar import get_client, DEFAULT_MODEL
 from edgelab import agent, docker_env
@@ -14,6 +16,23 @@ from edgelab.store import Store
 from edgelab.tools import _compact_score
 
 SUMMARIZE_EVERY = 6
+BEST_WS = Path("outputs/best_workspace")
+
+
+def _snapshot_workspace():
+    if BEST_WS.exists():
+        shutil.rmtree(BEST_WS)
+    shutil.copytree(docker_env.WORKSPACE, BEST_WS, ignore=shutil.ignore_patterns("__pycache__"))
+
+
+def _restore_workspace():
+    for p in docker_env.WORKSPACE.glob("*"):
+        if p.name == "__pycache__":
+            continue
+        shutil.rmtree(p) if p.is_dir() else p.unlink()
+    for p in BEST_WS.glob("*"):
+        dst = docker_env.WORKSPACE / p.name
+        shutil.copytree(p, dst) if p.is_dir() else shutil.copy2(p, dst)
 
 
 def _summarize_lessons(store: Store, model: str | None) -> str:
@@ -63,6 +82,12 @@ def run(*, db="outputs/dabic.sqlite", minutes=None, max_turns=1000,
     while turn < stop_at and (deadline is None or time.time() < deadline):
         turn += 1
         t0 = time.time()
+        # Hill-climb: if the last edit regressed below best, revert to the best
+        # workspace and improve FROM there (keep the good, discard the bad).
+        if last_score and last_score.get("score", 0) < best - 1e-6 and BEST_WS.exists():
+            _restore_workspace()
+            print(f"    [restore] last={last_score.get('score'):.1f} < best={best:.1f} "
+                  f"-> reverted workspace to best")
         print(f"\n--- turn {turn} (elapsed {int(time.time()-t0)}s) ---")
         out = agent.run_turn(store=store, turn=turn, last_score=last_score,
                              lessons=lessons, best_score=best, model=model, effort=effort)
@@ -79,7 +104,13 @@ def run(*, db="outputs/dabic.sqlite", minutes=None, max_turns=1000,
 
         row = store.best()
         new_best = row["score"] if row else 0.0
-        arrow = " ⬆" if new_best > best + 1e-9 else ""
+        improved = new_best > best + 1e-9
+        arrow = " ⬆" if improved else ""
+        if improved:
+            try:
+                _snapshot_workspace()   # checkpoint the files that achieved the new best
+            except Exception as e:
+                print(f"    [snapshot skip: {e}]")
         best = new_best
         dt = int(time.time() - t0)
         cur = last_score.get("score")
