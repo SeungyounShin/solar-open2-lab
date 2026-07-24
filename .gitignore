@@ -14,6 +14,13 @@ __pycache__/
 .idea/
 .vscode/
 
-# outputs
+# outputs / agent workspace / run artifacts
 outputs/
+workspace/
 *.log
+*.sqlite
+
+# NEVER commit: copyrighted papers (SEG/Geophysics), EdgeBench task internals & judge.
+# These are pulled locally from the public Docker images; they are not ours to redistribute.
+resources/
+.venv-geo/
