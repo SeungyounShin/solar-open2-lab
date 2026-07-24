@@ -46,7 +46,13 @@ def run(*, db="outputs/dabic.sqlite", minutes=None, max_turns=1000,
     deadline = time.time() + minutes * 60 if minutes else None
     best_row = store.best()
     best = best_row["score"] if best_row else 0.0
+    # Resume: carry the champion's feedback into turn 1 so we build on it, not restart.
     last_score: dict = {}
+    if best_row:
+        try:
+            last_score = _compact_score(json.loads(best_row["result_json"]))
+        except Exception:
+            pass
     lessons = store.get_lessons()
 
     print(f"=== dabic self-improving loop (model={model or DEFAULT_MODEL}, effort={effort}) ===")
