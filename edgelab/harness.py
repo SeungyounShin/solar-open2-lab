@@ -58,8 +58,9 @@ def run(*, db="outputs/dabic.sqlite", minutes=None, max_turns=1000,
     print(f"=== dabic self-improving loop (model={model or DEFAULT_MODEL}, effort={effort}) ===")
     print(f"    starting best={best:.1f}/100, prior submissions={store.count()}")
 
-    turn = 0
-    while turn < max_turns and (deadline is None or time.time() < deadline):
+    turn = store.max_turn()          # resume: continue numbering, don't overwrite trajectories
+    stop_at = turn + max_turns
+    while turn < stop_at and (deadline is None or time.time() < deadline):
         turn += 1
         t0 = time.time()
         print(f"\n--- turn {turn} (elapsed {int(time.time()-t0)}s) ---")

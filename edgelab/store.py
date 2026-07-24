@@ -61,6 +61,9 @@ class Store:
     def count(self):
         return self.db.execute("SELECT COUNT(*) c FROM submissions").fetchone()["c"]
 
+    def max_turn(self):
+        return self.db.execute("SELECT COALESCE(MAX(turn),0) m FROM submissions").fetchone()["m"]
+
     def curve(self):
         rows = self.db.execute("SELECT id, score FROM submissions ORDER BY id").fetchall()
         out, best = [], -1.0
