@@ -5,9 +5,16 @@ best-across-submissions champion (EdgeBench's selection rule), and holds the
 rolling `lessons` summary that keeps 24/7 context bounded.
 """
 import json
+import re
 import time
 import sqlite3
 from pathlib import Path
+
+
+def _parse_comp_score(msg: str):
+    """Per-component score lives in the message string, e.g. 'score=17.85/35.0'."""
+    m = re.search(r"score=([-\d.]+)", msg or "")
+    return float(m.group(1)) if m else None
 
 
 class Store:
@@ -32,9 +39,9 @@ class Store:
         comp = {}
         for d in result.get("details", []):
             name = (d.get("name", "") or "")[:1].upper()  # A_static -> A
-            msg = d.get("message", "")
-            # pull "score=X/Y" if present
-            comp[name] = d.get("score")
+            # per-component score lives in the message string ("score=X/Y")
+            v = d.get("score")
+            comp[name] = v if isinstance(v, (int, float)) else _parse_comp_score(d.get("message", ""))
         def g(k):
             v = comp.get(k)
             return float(v) if isinstance(v, (int, float)) else None
