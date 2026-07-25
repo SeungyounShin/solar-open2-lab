@@ -1,129 +1,40 @@
-"""The 24/7 self-improving loop around the REAL dabic judge.
+"""Run driver: one long agentic episode per invocation.
 
-Each turn Solar edits the deliverables and scores against the real judge; we keep
-the best-across-submissions (EdgeBench's rule), print the climbing curve, and
-periodically compress history into `lessons` so context stays bounded forever.
+The supervisor calls this repeatedly (short chunks that survive OOM). Each call
+resumes from the best-known workspace + the store, then runs a single continuous
+episode (see episode.py). State is durable, so progress accumulates across
+restarts even though each process is short-lived.
 """
 from __future__ import annotations
-import json
 import time
-import shutil
-from pathlib import Path
 
-from solar import get_client, DEFAULT_MODEL
-from edgelab import agent, docker_env
+from solar import DEFAULT_MODEL
+from edgelab import docker_env, checkpoint
+from edgelab.episode import run_episode
 from edgelab.store import Store
-from edgelab.tools import _compact_score
-
-SUMMARIZE_EVERY = 6
-BEST_WS = Path("outputs/best_workspace")
 
 
-def _snapshot_workspace():
-    if BEST_WS.exists():
-        shutil.rmtree(BEST_WS)
-    shutil.copytree(docker_env.WORKSPACE, BEST_WS, ignore=shutil.ignore_patterns("__pycache__"))
-
-
-def _restore_workspace():
-    for p in docker_env.WORKSPACE.glob("*"):
-        if p.name == "__pycache__":
-            continue
-        shutil.rmtree(p) if p.is_dir() else p.unlink()
-    for p in BEST_WS.glob("*"):
-        dst = docker_env.WORKSPACE / p.name
-        shutil.copytree(p, dst) if p.is_dir() else shutil.copy2(p, dst)
-
-
-def _summarize_lessons(store: Store, model: str | None) -> str:
-    rows = store.recent(limit=10)
-    digest = [{"turn": r["turn"], "score": r["score"], "summary": (r["summary"] or "")[:200]}
-              for r in rows]
-    client = get_client()
-    prompt = (
-        "You are keeping a running lab notebook for a D-ABIC gravity-inversion agent.\n"
-        "Given recent judge results, write <=8 terse bullet lessons: what raised the score, "
-        "what broke components (import errors, non-data-space, bad logdet, beta not updating, "
-        "results.json schema, Vinton settings), and what to try next. Bullets only.\n\n"
-        f"Recent:\n{json.dumps(digest, ensure_ascii=False)}"
-    )
-    r = client.chat.completions.create(
-        model=model or DEFAULT_MODEL, messages=[{"role": "user", "content": prompt}],
-        max_tokens=4000, reasoning_effort="low", temperature=0.3)
-    return (r.choices[0].message.content or "").strip()
-
-
-def run(*, db="outputs/dabic.sqlite", minutes=None, max_turns=1000,
-        model=None, effort="high"):
+def run(*, db="outputs/dabic.sqlite", minutes=30, max_turns=None,
+        model=None, effort="medium"):
     if not docker_env.images_present():
         raise SystemExit(
-            "dabic images not found. Pull them first:\n"
+            "dabic images not found. Pull them:\n"
             f"  docker pull --platform linux/amd64 {docker_env.WORK_IMAGE}\n"
             f"  docker pull --platform linux/amd64 {docker_env.JUDGE_IMAGE}")
 
     store = Store(db)
-    deadline = time.time() + minutes * 60 if minutes else None
-    best_row = store.best()
-    best = best_row["score"] if best_row else 0.0
-    # Resume: carry the champion's feedback into turn 1 so we build on it, not restart.
-    last_score: dict = {}
-    if best_row:
-        try:
-            last_score = _compact_score(json.loads(best_row["result_json"]))
-        except Exception:
-            pass
-    lessons = store.get_lessons()
+    row = store.best()
+    best = row["score"] if row else 0.0
 
-    print(f"=== dabic self-improving loop (model={model or DEFAULT_MODEL}, effort={effort}) ===")
-    print(f"    starting best={best:.1f}/100, prior submissions={store.count()}")
+    # Resume from the best-known files (a prior episode may have died mid-regression).
+    if checkpoint.restore_best():
+        print(f"[resume] restored best workspace (best={best:.1f}/100)")
 
-    turn = store.max_turn()          # resume: continue numbering, don't overwrite trajectories
-    stop_at = turn + max_turns
-    while turn < stop_at and (deadline is None or time.time() < deadline):
-        turn += 1
-        t0 = time.time()
-        # Hill-climb: if the last edit regressed below best, revert to the best
-        # workspace and improve FROM there (keep the good, discard the bad).
-        if last_score and last_score.get("score", 0) < best - 1e-6 and BEST_WS.exists():
-            _restore_workspace()
-            print(f"    [restore] last={last_score.get('score'):.1f} < best={best:.1f} "
-                  f"-> reverted workspace to best")
-        print(f"\n--- turn {turn} (elapsed {int(time.time()-t0)}s) ---")
-        out = agent.run_turn(store=store, turn=turn, last_score=last_score,
-                             lessons=lessons, best_score=best, model=model, effort=effort)
-        last_score = out["last_score"] or last_score
+    print(f"=== dabic self-improving (model={model or DEFAULT_MODEL}, effort={effort}) "
+          f"start best={best:.1f}/100, prior submissions={store.count()} ===")
 
-        # Safety net: guarantee one graded submission per turn even if the agent
-        # spent all its steps editing/debugging and forgot to call `score`.
-        if not out["scored"]:
-            print("    [auto-score] agent didn't score; running judge on current outputs/")
-            result = docker_env.run_judge()
-            store.add_submission(turn=turn, result=result)
-            last_score = _compact_score(result)
-            print(f"    [auto-score] {result.get('score')}/100  {str(result.get('summary'))[:70]}")
+    run_episode(store, minutes=minutes or 30, model=model, effort=effort)
 
-        row = store.best()
-        new_best = row["score"] if row else 0.0
-        improved = new_best > best + 1e-9
-        arrow = " ⬆" if improved else ""
-        if improved:
-            try:
-                _snapshot_workspace()   # checkpoint the files that achieved the new best
-            except Exception as e:
-                print(f"    [snapshot skip: {e}]")
-        best = new_best
-        dt = int(time.time() - t0)
-        cur = last_score.get("score")
-        print(f"    turn {turn}: scored={out['scored']} this={cur} best={best:.1f}/100{arrow} "
-              f"({out['steps']} steps, {out['calls']} calls, {dt}s)")
-
-        if turn % SUMMARIZE_EVERY == 0:
-            try:
-                lessons = _summarize_lessons(store, model)
-                store.set_lessons(lessons)
-                print(f"    [lessons updated]")
-            except Exception as e:
-                print(f"    [lessons skip: {e}]")
-
-    print(f"\n=== done. best={best:.1f}/100 over {store.count()} submissions ===")
-    return best
+    final = store.best()
+    print(f"=== chunk done. best={final['score']:.1f}/100 over {store.count()} submissions ===")
+    return final["score"]
