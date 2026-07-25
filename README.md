@@ -13,19 +13,20 @@ reads the per-component feedback, and improves — over and over. It's the EdgeB
 
 ## What the task actually is
 
-3D gravity inversion: buried salt-dome bodies create a tiny surface gravity anomaly (right),
-and the job is to reconstruct the 3D density structure (middle) from that anomaly alone — an
-ill-posed inverse problem that needs regularization, which is exactly what D-ABIC adaptively
-tunes. Depth sweep of a real SimPEG inversion on the synthetic Model 3:
+3D gravity inversion: buried salt-dome bodies create a tiny surface gravity anomaly, and the
+job is to reconstruct the **3D density volume** from that anomaly alone — an ill-posed inverse
+problem that needs regularization, which is exactly what D-ABIC adaptively tunes. Rotating 3D
+view of a real SimPEG inversion on the synthetic Model 3: **TRUE** bodies vs the **RECOVERED**
+density (note the vertical smearing — the classic L2 depth ambiguity D-ABIC's sparsity fights):
 
-![gravity inversion depth sweep](assets/dabic_inversion.gif)
+![3D density: true vs recovered](assets/dabic_3d.gif)
 
 ```bash
-# regenerate: run the inversion in the work container, then render
+# regenerate: run the inversion in the work container, then render the 3D view
 docker run --rm --platform linux/amd64 -v "$PWD/outputs/viz:/dump" \
   -w /home/workspace/dabic_gravity_vinton --entrypoint bash \
   seededge/edgebench.work.dabic_gravity_inversion:85db0aba8a5f -c "python /dump/inv.py"  # scripts/_invert_for_viz.py
-python scripts/make_gif.py
+python scripts/make_3d.py     # -> assets/dabic_3d.gif   (scripts/make_gif.py renders the depth-slice version)
 ```
 
 ## Live learning curve
