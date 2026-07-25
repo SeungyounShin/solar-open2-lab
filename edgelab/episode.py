@@ -34,6 +34,8 @@ def _kickoff(best: float, last_score: dict, lessons: str) -> str:
 def _approx_msg_text(messages) -> str:
     out = []
     for m in messages:
+        if m.get("reasoning"):
+            out.append("[thinking] " + str(m["reasoning"]))
         out.append(str(m.get("content") or ""))
         for tc in m.get("tool_calls", []) or []:
             out.append(json.dumps(tc.get("function", {})))
@@ -97,8 +99,11 @@ def run_episode(store, *, minutes=30, model=None, effort="medium", max_tokens=32
         msg = choice.message
 
         if choice.finish_reason == "tool_calls" and msg.tool_calls:
-            messages.append({"role": "assistant", "content": msg.content or "",
-                             "tool_calls": [tc.model_dump() for tc in msg.tool_calls]})
+            asst = {"role": "assistant", "content": msg.content or "",
+                    "tool_calls": [tc.model_dump() for tc in msg.tool_calls]}
+            if getattr(msg, "reasoning", None):   # preserved thinking: feed CoT back
+                asst["reasoning"] = msg.reasoning
+            messages.append(asst)
             for tc in msg.tool_calls:
                 name = tc.function.name
                 try:
@@ -122,7 +127,10 @@ def run_episode(store, *, minutes=30, model=None, effort="medium", max_tokens=32
                 messages.append({"role": "tool", "tool_call_id": tc.id,
                                  "content": json.dumps(result)[:12000]})
         else:
-            messages.append({"role": "assistant", "content": msg.content or ""})
+            asst = {"role": "assistant", "content": msg.content or ""}
+            if getattr(msg, "reasoning", None):
+                asst["reasoning"] = msg.reasoning
+            messages.append(asst)
             since_score += 1
             left = int((deadline - time.time()) / 60)
             nudge = ("Call `score` now to get fresh judge feedback, then fix the weakest component."
