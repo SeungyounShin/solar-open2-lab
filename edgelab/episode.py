@@ -43,9 +43,19 @@ def _approx_msg_text(messages) -> str:
 
 
 def _compact(messages, client, model, keep_tail=8) -> list:
-    """Summarize the middle of the conversation, keep system prefix + recent tail."""
+    """Summarize the middle of the conversation, keep system prefix + recent tail.
+
+    The tail must not START with an orphan `tool` message (its assistant with
+    tool_calls would be summarized away), or the API 400s. Drop leading tool
+    messages until the tail begins at a valid boundary (user/assistant).
+    """
     system = messages[0]
-    middle, tail = messages[1:-keep_tail], messages[-keep_tail:]
+    tail = messages[-keep_tail:]
+    while tail and tail[0].get("role") == "tool":
+        tail = tail[1:]
+    if not tail:
+        tail = messages[-1:]
+    middle = messages[1:len(messages) - len(tail)]
     if not middle:
         return messages
     dump = _approx_msg_text(middle)[-14000:]
