@@ -153,6 +153,7 @@ def _compact_score(result: dict) -> dict:
     m = result.get("metrics", {})
     keep = {k: m[k] for k in (
         "tier_name", "is_data_space", "beta_truly_updated", "uses_proper_logdet", "uses_bad_det",
-        "structural_penalty", "penalty_reason", "n_unique_beta_orders") if k in m}
+        "structural_penalty", "penalty_reason", "n_unique_beta_orders",
+        "penalty_thresholds", "penalty_observed", "raw_total") if k in m}
     return {"score": result.get("score"), "summary": result.get("summary"),
             "components": comps, "metrics": keep}

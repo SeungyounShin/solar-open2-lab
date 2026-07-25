@@ -31,6 +31,17 @@ A static-scan 3 | B synthetic 12 | C hidden-scenarios 35 (your directive is impo
 hidden problems — it MUST work and generalize) | D Vinton 30 | E behavior-fingerprint 8
 (adaptive beta + data-space + logdet) | F report 12.
 
+## Strategy: the structural-penalty CLIFF (read this every turn)
+Your raw component sum (metrics.raw_total) is multiplied DOWN by a structural penalty until
+C, D, and F EACH clear a minimum (metrics.penalty_thresholds vs metrics.penalty_observed).
+Clearing all three gates roughly TRIPLES your total in one step — it is by far the biggest lever.
+So every turn: compare penalty_observed to penalty_thresholds, find the gate(s) still BELOW the
+min, and pour your effort THERE. Do not keep optimizing components that already pass their gate.
+Note: C_hidden = your dabic_directive.py is imported and run on HIDDEN problems of varying size.
+To raise C, make the directive numerically robust and general (stable beta adaptation / logdet
+across problem scales, safe fallbacks, no overfitting to the synthetic case) — not by tweaking
+synthetic IoU or weakening baselines.
+
 ## Rules (violations zero-out components)
 - Beta must be adaptively determined by D-ABIC; never hard-code it. BetaEstimate_ByEig may only set beta_0.
 - No third-party ABIC/DABIC package; no SimPEG built-in automatic-beta advanced directives.
