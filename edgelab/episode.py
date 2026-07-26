@@ -24,7 +24,8 @@ def _kickoff(best: float, last_score: dict, lessons: str) -> str:
             {k: last_score.get(k) for k in ("score", "summary", "components", "metrics")},
             ensure_ascii=False)[:2500])
     if lessons:
-        s.append("Lessons carried over:\n" + lessons)
+        s.append("YOUR LAB NOTEBOOK from earlier episodes — do NOT repeat anything under "
+                 "TRIED & FAILED; start from NEXT:\n" + lessons)
     s.append("Inspect outputs/ (list_outputs) and the latest results, then keep improving the "
              "weakest scoring component. Edit -> run_work to test -> `score` after meaningful "
              "changes. Work continuously; don't stop until told.")
@@ -40,6 +41,33 @@ def _approx_msg_text(messages) -> str:
         for tc in m.get("tool_calls", []) or []:
             out.append(json.dumps(tc.get("function", {})))
     return "\n".join(out)
+
+
+def _write_lessons(store, client, model, messages, best, prev_lessons):
+    """Carry knowledge ACROSS episodes.
+
+    An episode's chain-of-thought dies with it; only files + judge scores persist.
+    Without this, every episode re-derives the same conclusion and retries the same
+    edit. So before exiting we distill what was tried and what it did to the score,
+    merged with the previous lessons, and store it for the next episode's kickoff.
+    """
+    log = _approx_msg_text(messages[1:])[-16000:]
+    r = client.chat.completions.create(
+        model=model, max_tokens=3000, reasoning_effort="low", temperature=0.3,
+        messages=[{"role": "user", "content":
+                   "You keep the running lab notebook for an agent improving a D-ABIC gravity "
+                   "inversion submission. Merge the PREVIOUS lessons with THIS episode's log into "
+                   "an updated notebook, <=300 words, as terse bullets under three headings:\n"
+                   "TRIED & FAILED (approach -> what happened; keep these, they prevent repeats)\n"
+                   "WORKS (keep doing)\nNEXT (concrete untried ideas)\n"
+                   "Be specific about approaches, not generic advice. Drop stale items.\n\n"
+                   f"Best score so far: {best:.1f}/100\n\n"
+                   f"PREVIOUS LESSONS:\n{prev_lessons or '(none yet)'}\n\n"
+                   f"THIS EPISODE LOG:\n{log}"}])
+    text = (r.choices[0].message.content or "").strip()
+    if text:
+        store.set_lessons(text)
+    return text
 
 
 def _compact(messages, client, model, keep_tail=8) -> list:
@@ -94,6 +122,9 @@ def run_episode(store, *, minutes=30, model=None, effort="medium", max_tokens=32
     step = 0
     since_score = 0
     reason_tok = 0
+    last_sig = None       # detect verbatim-repeated turns (degenerate loop)
+    repeats = 0
+    loops_broken = 0
 
     print(f"=== episode {ep_id} (model={model}, effort={effort}, budget={minutes}m, "
           f"start best={best:.1f}) ===")
@@ -114,6 +145,11 @@ def run_episode(store, *, minutes=30, model=None, effort="medium", max_tokens=32
             if getattr(msg, "reasoning", None):   # preserved thinking: feed CoT back
                 asst["reasoning"] = msg.reasoning
             messages.append(asst)
+
+            # Degenerate-loop guard: identical thinking + identical call = no progress.
+            sig = json.dumps([tc.function.model_dump() for tc in msg.tool_calls], sort_keys=True)
+            repeats = repeats + 1 if sig == last_sig else 0
+            last_sig = sig
             for tc in msg.tool_calls:
                 name = tc.function.name
                 try:
@@ -136,6 +172,19 @@ def run_episode(store, *, minutes=30, model=None, effort="medium", max_tokens=32
                     print(f"  step {step} [{name}] {result.get('path') or 'exit='+str(result.get('exit'))}")
                 messages.append({"role": "tool", "tool_call_id": tc.id,
                                  "content": json.dumps(result)[:12000]})
+
+            if repeats >= 1:   # same call twice in a row — interrupt before it spirals
+                loops_broken += 1
+                print(f"  step {step} [loop] repeated the same call {repeats+1}x — nudging")
+                messages.append({"role": "user", "content":
+                    "STOP — you just issued that exact same tool call again, with the same "
+                    "reasoning. Re-writing identical content makes no progress. Do something "
+                    "DIFFERENT now: either `score` to get fresh judge numbers, or `run_work` to "
+                    "test what you already wrote, or attack a different gate. State in one line "
+                    "what you are changing that you have not already tried."})
+                if repeats >= 3:
+                    print(f"  step {step} [loop] stuck — ending episode early so it restarts clean")
+                    break
         else:
             asst = {"role": "assistant", "content": msg.content or ""}
             if getattr(msg, "reasoning", None):
@@ -156,8 +205,14 @@ def run_episode(store, *, minutes=30, model=None, effort="medium", max_tokens=32
 
         _save(traj_dir, ep_id, model, messages, step, best, reason_tok)
 
+    try:
+        lessons = _write_lessons(store, client, model, messages, best, lessons)
+        print(f"  [lessons] notebook updated ({len(lessons)} chars) -> next episode inherits it")
+    except Exception as e:
+        print(f"  [lessons] skipped: {e}")
+
     print(f"=== episode {ep_id} done: {step} steps, best={best:.1f}/100, "
-          f"reasoning_tokens≈{reason_tok} ===")
+          f"reasoning_tokens≈{reason_tok}, repeats broken={loops_broken} ===")
     return best
 
 
