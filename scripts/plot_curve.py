@@ -38,19 +38,30 @@ def main():
     comp = {k: rows[best_i][i] for i, k in enumerate("ABCDEF", start=2)}
     peak = scores[best_i]
 
+    # EdgeBench official leaderboard, dabic_gravity_inversion, @2/4/6/8/10/12h
+    OPUS_H = [2, 4, 6, 8, 10, 12]
+    OPUS_S = [9.5, 15.2, 15.7, 17.4, 17.5, 17.5]
+
     plt.rcParams.update({"font.size": 11, "figure.dpi": 130})
     fig, ax = plt.subplots(figsize=(8, 4.6))
     ax.scatter(hrs, scores, s=22, color="#c0392b", alpha=0.35, label="each submission", zorder=2)
     ax.plot(hrs, best, color="#c0392b", lw=2.4, marker="o", ms=3.5,
-            label="best-so-far", zorder=3)
+            label="solar-open2 best-so-far", zorder=3)
     ax.fill_between(hrs, 0, best, color="#c0392b", alpha=0.06)
+
+    # reference: Claude Opus 4.8 (EdgeBench official 12h leaderboard)
+    ax.plot(OPUS_H, OPUS_S, color="#555", lw=1.8, ls="--", marker="s", ms=3,
+            label="Claude Opus 4.8 (EdgeBench @2–12h)", zorder=3)
+    ax.axhline(17.5, color="#888", lw=0.8, ls=":", zorder=1)
+    ax.text(0.99, 17.5, " Opus 4.8 @12h = 17.5", color="#555", fontsize=8,
+            va="bottom", ha="right", transform=ax.get_yaxis_transform())
 
     ax.set_title("solar-open2 self-improving on EdgeBench\n"
                  "dabic_gravity_inversion — scored by the real judge", fontsize=12, loc="left")
-    ax.set_xlabel("elapsed wall-clock time (hours)")
+    ax.set_xlabel("elapsed time (hours)")
     ax.set_ylabel("judge score (/100)")
-    ax.set_ylim(0, max(20, peak * 1.35))
-    ax.set_xlim(0, max(0.5, hrs[-1] * 1.02))
+    ax.set_ylim(0, max(20, peak * 1.35, 19))
+    ax.set_xlim(0, max(0.5, hrs[-1] * 1.02, 12.3))
     ax.grid(True, alpha=0.25)
     ax.legend(loc="lower right", frameon=False, fontsize=9)
 
