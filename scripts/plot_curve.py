@@ -38,7 +38,9 @@ def main():
     comp = {k: rows[best_i][i] for i, k in enumerate("ABCDEF", start=2)}
     peak = scores[best_i]
 
-    # EdgeBench official leaderboard, dabic_gravity_inversion, @2/4/6/8/10/12h
+    # Claude Opus 4.8 on this same task, from EdgeBench's official leaderboard
+    # ("Per-Task Scores by Time Budget (51 tasks)" table, dabic_gravity_inversion row):
+    # https://github.com/ByteDance-Seed/EdgeBench#leaderboard   -> 9.5/15.2/15.7/17.4/17.5/17.5
     OPUS_H = [2, 4, 6, 8, 10, 12]
     OPUS_S = [9.5, 15.2, 15.7, 17.4, 17.5, 17.5]
 

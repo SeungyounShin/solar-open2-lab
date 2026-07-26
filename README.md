@@ -31,11 +31,20 @@ python scripts/make_3d.py     # -> assets/dabic_3d.gif   (scripts/make_gif.py re
 
 ## Live learning curve
 
-`solar-open2`'s judge score on this single task vs elapsed wall-clock time (best-so-far
-envelope + each submission). Auto-regenerated from the run's SQLite store as it improves —
-same idea as EdgeBench's own time-vs-performance curves, for one model on one task.
+`solar-open2`'s judge score on this single task vs elapsed time (best-so-far envelope + each
+submission), against **Claude Opus 4.8** on the same task. Auto-regenerated from the run's
+SQLite store as it improves — same idea as EdgeBench's own time-vs-performance curves.
 
 ![dabic self-improving curve](assets/dabic_curve.png)
+
+The Opus 4.8 line (9.5 / 15.2 / 15.7 / 17.4 / 17.5 / 17.5 at @2/4/6/8/10/12h) is the
+`dabic_gravity_inversion` row of EdgeBench's official leaderboard —
+[*Per-Task Scores by Time Budget (51 tasks)*](https://github.com/ByteDance-Seed/EdgeBench#leaderboard)
+([tech report](https://arxiv.org/abs/2607.05155)).
+
+> Caveat on the x-axis: EdgeBench's numbers are *agent-hours under the official harness*, while
+> ours is wall-clock of this loop (amd64 emulation, restarts and idle gaps included). Compare the
+> **scores**, not the pace — the dotted line marks Opus 4.8's 12h result.
 
 ```bash
 python scripts/plot_curve.py         # regenerate assets/dabic_curve.png from outputs/dabic.sqlite
