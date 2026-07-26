@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 export PATH="/opt/homebrew/bin:$PATH"
 
 CHUNK_MIN="${CHUNK_MIN:-30}"
-EFFORT="${EFFORT:-medium}"
+EFFORT="${EFFORT:-high}"
 
 i=0
 while true; do
