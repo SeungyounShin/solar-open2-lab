@@ -29,7 +29,28 @@ docker run --rm --platform linux/amd64 -v "$PWD/outputs/viz:/dump" \
 python scripts/make_3d.py     # -> assets/dabic_3d.gif   (scripts/make_gif.py renders the depth-slice version)
 ```
 
-## Live learning curve
+## Result
+
+Over one 40.7-hour run — 98 graded submissions, fully autonomous — `solar-open2` climbed
+**3.0 → 22.3 / 100**, above Claude Opus 4.8's 17.5 at 12h on EdgeBench's leaderboard for this task.
+
+| | A static | B synthetic | C hidden | D Vinton | E behavior | F report | **total** |
+|---|---|---|---|---|---|---|---|
+| best submission | **3**/3 | 7.4/12 | 18.4/35 | 19.9/30 | **8**/8 | 10/12 | **22.3**/100 |
+
+What actually moved the needle, in order: giving the run **one long episode with preserved
+chain-of-thought** instead of restarting the conversation each turn (13.2 → 22.3 — by far the
+biggest jump), then unlocking components one at a time as the agent got its SimPEG code to run
+(D, the field-data component, went 0 → 19.9 once `run_vinton.py` completed a real inversion).
+
+It then plateaued at 22.3, and four further interventions — surfacing the judge's penalty gates,
+persisting a lessons notebook across episodes, raising reasoning effort, and injecting the decoded
+C rubric — each left the score flat. The reason is visible in the rubric: the remaining ~17 points
+live in C3/C4, hidden low-SNR / thin-layer / negative-density inversions that are scored on
+`RMSE vs cooling < 0.8` and `IoU ≥ 0.55`. No prompt or harness change earns those; only a
+numerically better inversion does. That is where the model's ceiling on this task sits.
+
+## Learning curve
 
 `solar-open2`'s judge score on this single task vs elapsed time (best-so-far envelope + each
 submission), against **Claude Opus 4.8** on the same task. Auto-regenerated from the run's
